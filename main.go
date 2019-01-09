@@ -90,19 +90,20 @@ func main() {
 
 			log.Printf("[routine: %d] starting\n", curRoutine)
 
-			writer, err := writerFactory()
-			if err != nil {
-				log.Printf("[routine: %d] error while trying to create a writer from factory: %s\n", curRoutine, err)
-				return
-			}
-			defer writer.Close()
-
 			for curRound := 0; curRound < *rounds; curRound++ {
+				writer, err := writerFactory()
+				if err != nil {
+					log.Printf("[routine: %d] error while trying to create a writer from factory: %s\n", curRoutine, err)
+					return
+				}
+
 				if err := writer.Write(ctx, "1", "hello"); err != nil {
 					log.Printf("[routine: %d, round: %d] error while trying to send to kafka: %s\n", curRoutine, curRound, err)
 				} else {
 					log.Printf("[routine: %d, round: %d] successfully sent \n", curRoutine, curRound)
 				}
+
+				writer.Close()
 			}
 		}(curRoutine)
 	}
