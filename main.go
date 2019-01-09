@@ -85,13 +85,14 @@ func main() {
 		go func(curRoutine int) {
 			log.Printf("[routine: %d] starting\n", curRoutine)
 
+			client, err := sarama.NewClient(strings.Split(*brokerStr, ","), producerCfg)
+			if err != nil {
+				log.Printf("[routine: %d] error while trying to create new client: %s\n", curRoutine, err)
+			}
+			defer client.Close()
+
 			for {
 				func() {
-					client, err := sarama.NewClient(strings.Split(*brokerStr, ","), producerCfg)
-					if err != nil {
-						log.Printf("[routine: %d] error while trying to create new client: %s\n", curRoutine, err)
-					}
-					defer client.Close()
 
 					writer, err := writerFactory(client)
 					if err != nil {
