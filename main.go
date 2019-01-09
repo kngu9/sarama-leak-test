@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Shopify/sarama"
+
 	"sarama-leak-test/pkg/kafka"
 )
 
@@ -39,25 +41,29 @@ func main() {
 		log.Fatalf("invalud number of routines: %d", *routines)
 	}
 
+	producerCfg := sarama.NewConfig()
+	producerCfg.Producer.Return.Successes = true
+
+	producerCfg.Producer.Partitioner = func(topic string) sarama.Partitioner {
+		return sarama.NewHashPartitioner(topic)
+	}
+
 	for i := 0; i < 5; i++ {
-		writer, err := kafka.NewWriter(&kafka.WriterConfig{
-			Brokers: strings.Split(*brokerStr, ","),
-			Topic:   *topic,
-		})
+		client, err := sarama.NewClient(strings.Split(*brokerStr, ","), producerCfg)
 		if err != nil {
 			log.Printf("waiting for kafka to spin up... Tries: %d/5\n", i)
 
 			time.Sleep(time.Second * 5)
 		} else {
-			writer.Close()
+			client.Close()
 			break
 		}
 	}
 
-	writerFactory := func() (Writer, error) {
+	writerFactory := func(client sarama.Client) (Writer, error) {
 		return kafka.NewWriter(&kafka.WriterConfig{
-			Brokers: strings.Split(*brokerStr, ","),
-			Topic:   *topic,
+			Client: client,
+			Topic:  *topic,
 		})
 	}
 
@@ -81,7 +87,13 @@ func main() {
 
 			for {
 				func() {
-					writer, err := writerFactory()
+					client, err := sarama.NewClient(strings.Split(*brokerStr, ","), producerCfg)
+					if err != nil {
+						log.Printf("[routine: %d] error while trying to create new client: %s\n", curRoutine, err)
+					}
+					defer client.Close()
+
+					writer, err := writerFactory(client)
 					if err != nil {
 						log.Printf("[routine: %d] error while trying to create a writer from factory: %s\n", curRoutine, err)
 						return

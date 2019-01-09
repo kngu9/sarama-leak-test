@@ -16,16 +16,16 @@ type Writer struct {
 
 // WriterConfig is holds the configuration for a new writer
 type WriterConfig struct {
-	Topic   string
-	Brokers []string
+	Topic  string
+	Client sarama.Client
 }
 
 func (c *WriterConfig) validate() error {
 	if c.Topic == "" {
 		return errors.New("topic must be specified")
 	}
-	if len(c.Brokers) < 1 {
-		return errors.New("must specified at least 1 kafka broker")
+	if c.Client == nil {
+		return errors.New("client must be specified")
 	}
 
 	return nil
@@ -39,14 +39,7 @@ func NewWriter(cfg *WriterConfig) (*Writer, error) {
 		return nil, err
 	}
 
-	producerCfg := sarama.NewConfig()
-	producerCfg.Producer.Return.Successes = true
-
-	producerCfg.Producer.Partitioner = func(topic string) sarama.Partitioner {
-		return sarama.NewHashPartitioner(cfg.Topic)
-	}
-
-	producer, err := sarama.NewSyncProducer(cfg.Brokers, producerCfg)
+	producer, err := sarama.NewSyncProducerFromClient(cfg.Client)
 	if err != nil {
 		return nil, err
 	}
