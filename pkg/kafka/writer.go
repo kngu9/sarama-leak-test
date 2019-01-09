@@ -69,20 +69,8 @@ func (w *Writer) Write(ctx context.Context, key string, payload interface{}) err
 		Value: sarama.ByteEncoder(payloadData),
 	}
 
-	errChan := make(chan error)
-	defer close(errChan)
-
-	go func() {
-		_, _, err := w.writer.SendMessage(msg)
-		errChan <- err
-	}()
-
-	select {
-	case err := <-errChan:
-		return err
-	case <-ctx.Done():
-		return errors.New("context killed")
-	}
+	_, _, err = w.writer.SendMessage(msg)
+	return err
 }
 
 // Close terminates the conneciton

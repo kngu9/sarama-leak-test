@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"time"
 
 	"sarama-leak-test/pkg/kafka"
@@ -18,7 +17,6 @@ import (
 var (
 	brokerStr = flag.String("brokers", "", "comma delimited list of kafka brokers")
 	topic     = flag.String("topic", "", "kafka topic to test on")
-	rounds    = flag.Int("rounds", 1000, "the amount of testing rounds per goroutine")
 	routines  = flag.Int("routines", 1000, "the amount of goroutines")
 )
 
@@ -36,9 +34,6 @@ func main() {
 	}
 	if *topic == "" {
 		log.Fatal("must specify list of topics")
-	}
-	if *rounds < 1 {
-		log.Fatalf("invalid number of rounds: %d", *rounds)
 	}
 	if *routines < 1 {
 		log.Fatalf("invalud number of routines: %d", *routines)
@@ -80,33 +75,27 @@ func main() {
 		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
 	}()
 
-	var wg sync.WaitGroup
-
 	for curRoutine := 0; curRoutine < *routines; curRoutine++ {
-		wg.Add(1)
-
 		go func(curRoutine int) {
-			defer wg.Done()
-
 			log.Printf("[routine: %d] starting\n", curRoutine)
 
-			for curRound := 0; curRound < *rounds; curRound++ {
-				writer, err := writerFactory()
-				if err != nil {
-					log.Printf("[routine: %d] error while trying to create a writer from factory: %s\n", curRoutine, err)
-					return
-				}
+			for {
+				func() {
+					writer, err := writerFactory()
+					if err != nil {
+						log.Printf("[routine: %d] error while trying to create a writer from factory: %s\n", curRoutine, err)
+						return
+					}
+					defer writer.Close()
 
-				if err := writer.Write(ctx, "1", "hello"); err != nil {
-					log.Printf("[routine: %d, round: %d] error while trying to send to kafka: %s\n", curRoutine, curRound, err)
-				} else {
-					log.Printf("[routine: %d, round: %d] successfully sent \n", curRoutine, curRound)
-				}
-
-				writer.Close()
+					if err := writer.Write(ctx, "1", "hello"); err != nil {
+						log.Printf("[routine: %d] error while trying to send to kafka: %s\n", curRoutine, err)
+					} else {
+						log.Printf("[routine: %d] successfully sent \n", curRoutine)
+					}
+				}()
 			}
 		}(curRoutine)
 	}
-
-	wg.Wait()
+	<-chan struct{}(nil)
 }
